@@ -1,0 +1,6 @@
+{
+  "name": "Family Savings",
+  "description": "Sistem Pengelolaan Tabungan & Keuangan Keluarga Multi-Admin Offline-First",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
