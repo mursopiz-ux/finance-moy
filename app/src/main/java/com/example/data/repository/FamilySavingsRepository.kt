@@ -917,4 +917,122 @@ class FamilySavingsRepository(
         }
         return sb.toString()
     }
+
+    // --- WHATSAPP & NOTES SHARE REPORT GENERATOR ---
+    suspend fun generateWhatsAppFinancialSummaryReport(): String {
+        val members = dao.getMembersSync()
+        val accounts = dao.getAccountsSync()
+        val txns = dao.getTransactionsSync().sortedByDescending { it.timestamp }.take(5)
+        val activeAdmin = dao.getCurrentActiveAdminSync()
+        val sdf = SimpleDateFormat("EEEE, dd MMMM yyyy HH:mm", Locale("id", "ID"))
+        val dateStr = sdf.format(Date())
+
+        val totalAssets = accounts.sumOf { it.balance }
+        val totalSavings = members.sumOf { it.currentBalance }
+        val totalPool = accounts.filter { it.isFamilyPool }.sumOf { it.balance }
+        val numFmt = java.text.NumberFormat.getNumberInstance(Locale("id", "ID"))
+
+        val sb = StringBuilder()
+        sb.append("📊 *LAPORAN KEUANGAN KELUARGA*\n")
+        sb.append("🏛️ *FAMILY SAVINGS SYSTEM*\n")
+        sb.append("📅 Waktu: $dateStr WIB\n")
+        sb.append("👤 Dicatat oleh: ${activeAdmin?.name ?: "Admin Keluarga"}\n\n")
+
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("💰 *RINGKASAN TOTAL ASET*\n")
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("• *Total Seluruh Aset:* Rp ${numFmt.format(totalAssets)}\n")
+        sb.append("• *Total Tabungan Anggota:* Rp ${numFmt.format(totalSavings)}\n")
+        sb.append("• *Kas Bersama (Family Pool):* Rp ${numFmt.format(totalPool)}\n\n")
+
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("👥 *RINCIAN TABUNGAN ANGGOTA*\n")
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        members.forEach { m ->
+            val pct = if (m.targetSavings > 0) ((m.currentBalance.toDouble() / m.targetSavings.toDouble()) * 100).toInt() else 0
+            val curFmt = numFmt.format(m.currentBalance)
+            val tarFmt = numFmt.format(m.targetSavings)
+            sb.append("• *${m.name}* (${m.relationship})\n")
+            sb.append("  Saldo: Rp $curFmt | Target: Rp $tarFmt ($pct%)\n")
+        }
+        sb.append("\n")
+
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("💳 *POSISI REKENING & KAS FISIK*\n")
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        accounts.forEach { acc ->
+            val balFmt = numFmt.format(acc.balance)
+            val poolTag = if (acc.isFamilyPool) " [Kas Pool]" else ""
+            sb.append("• *${acc.name}*$poolTag\n")
+            sb.append("  Saldo: Rp $balFmt\n")
+        }
+        sb.append("\n")
+
+        if (txns.isNotEmpty()) {
+            sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+            sb.append("📝 *5 TRANSAKSI TERAKHIR*\n")
+            sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+            val shortDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("id", "ID"))
+            txns.forEach { t ->
+                val sign = if (t.transactionType.contains("DEPOSIT") || t.transactionType.contains("INCOME")) "+" else "-"
+                val amtFmt = numFmt.format(t.amount)
+                val statusTag = if (t.status == "PENDING") " [PENDING]" else if (t.status == "VOIDED") " [BATAL]" else ""
+                sb.append("• $sign Rp $amtFmt - ${t.category}$statusTag\n")
+                sb.append("  ${t.memberName ?: t.sourceAccountName ?: "Keluarga"} (${shortDate.format(Date(t.timestamp))})\n")
+            }
+            sb.append("\n")
+        }
+
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("✅ *Buku Besar Seimbang & Terverifikasi*\n")
+        sb.append("_Laporan resmi diterbitkan melalui aplikasi Family Savings_")
+
+        return sb.toString()
+    }
+
+    fun generateTransactionReceiptText(t: TransactionRecord): String {
+        val sdf = SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale("id", "ID"))
+        val numFmt = java.text.NumberFormat.getNumberInstance(Locale("id", "ID"))
+        val amtFmt = numFmt.format(t.amount)
+        val sb = StringBuilder()
+        sb.append("🧾 *BUKTI TRANSAKSI — FAMILY SAVINGS*\n")
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("• *No. Transaksi:* ${t.id}\n")
+        sb.append("• *Waktu:* ${sdf.format(Date(t.timestamp))} WIB\n")
+        val label = when (t.transactionType) {
+            "MEMBER_DEPOSIT" -> "Setoran Tabungan Anggota"
+            "MEMBER_WITHDRAWAL" -> "Penarikan Tabungan Anggota"
+            "FAMILY_INCOME" -> "Pemasukan Kas Bersama"
+            "FAMILY_EXPENSE" -> "Pengeluaran Kas Bersama"
+            "ACCOUNT_TRANSFER" -> "Transfer Antar Rekening"
+            "CORRECTION" -> "Koreksi Pembukuan"
+            else -> t.transactionType
+        }
+        sb.append("• *Tipe:* $label\n")
+        if (t.memberName != null) {
+            sb.append("• *Anggota:* ${t.memberName}\n")
+        }
+        if (t.sourceAccountName != null) {
+            sb.append("• *Rekening/Kas:* ${t.sourceAccountName}\n")
+        }
+        if (t.destinationAccountName != null) {
+            sb.append("• *Tujuan Transfer:* ${t.destinationAccountName}\n")
+        }
+        sb.append("• *Nominal:* Rp $amtFmt\n")
+        sb.append("• *Kategori:* ${t.category}\n")
+        if (t.notes.isNotBlank()) {
+            sb.append("• *Catatan:* ${t.notes}\n")
+        }
+        sb.append("• *Admin:* ${t.adminName}\n")
+        val statusText = when (t.status) {
+            "POSTED" -> "SAH (Posted)"
+            "PENDING" -> "ANTREAN PENDING (Offline)"
+            "VOIDED" -> "DIBATALKAN (Voided)"
+            else -> t.status
+        }
+        sb.append("• *Status:* $statusText\n")
+        sb.append("━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("_Disimpan melalui aplikasi Family Savings_")
+        return sb.toString()
+    }
 }

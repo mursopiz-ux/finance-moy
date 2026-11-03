@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -23,7 +24,9 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.model.AuditLog
 import com.example.data.model.LedgerEntry
 import com.example.ui.components.CurrencyFormatter
+import com.example.ui.components.ShareUtils
 import com.example.ui.theme.DangerRed
+import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.SuccessGreen
 
 @Composable
@@ -32,8 +35,10 @@ fun ReportsAuditScreen(
     auditLogs: List<AuditLog>,
     onExportJson: ((String) -> Unit) -> Unit,
     onImportJson: (String) -> Unit,
-    onExportCsv: ((String) -> Unit) -> Unit
+    onExportCsv: ((String) -> Unit) -> Unit,
+    onGenerateWhatsAppReport: ((String) -> Unit) -> Unit
 ) {
+    val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Buku Besar (Ledger)", "Jejak Audit", "Cadangan & Laporan")
 
@@ -57,6 +62,17 @@ fun ReportsAuditScreen(
             0 -> LedgerTabContent(ledgerEntries)
             1 -> AuditLogsTabContent(auditLogs)
             2 -> BackupRestoreTabContent(
+                onShareWhatsAppReportDirect = {
+                    onGenerateWhatsAppReport { reportText ->
+                        ShareUtils.shareToWhatsAppOrNotes(context, reportText, "Bagikan Rekap ke WhatsApp / Catatan")
+                    }
+                },
+                onPreviewWhatsAppReport = {
+                    onGenerateWhatsAppReport { reportText ->
+                        previewDialogTitle = "Pratinjau Catatan WhatsApp"
+                        previewDialogContent = reportText
+                    }
+                },
                 onExportJson = {
                     onExportJson { jsonStr ->
                         previewDialogTitle = "Salinan Cadangan JSON (Full Database)"
@@ -103,7 +119,7 @@ fun ReportsAuditScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Data siap disalin atau disimpan:",
+                        text = "Data siap disalin atau dibagikan ke WhatsApp dan Catatan:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -125,11 +141,30 @@ fun ReportsAuditScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { previewDialogTitle = null },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Tutup")
+                        OutlinedButton(
+                            onClick = {
+                                ShareUtils.copyToClipboard(context, previewDialogContent)
+                            },
+                            modifier = Modifier.weight(1f).testTag("dialog_copy_button")
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Salin Teks")
+                        }
+                        Button(
+                            onClick = {
+                                ShareUtils.shareToWhatsAppOrNotes(context, previewDialogContent, title)
+                            },
+                            modifier = Modifier.weight(1f).testTag("dialog_share_button")
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Bagikan")
+                        }
                     }
                 }
             }
@@ -369,6 +404,8 @@ private fun AuditLogsTabContent(auditLogs: List<AuditLog>) {
 
 @Composable
 private fun BackupRestoreTabContent(
+    onShareWhatsAppReportDirect: () -> Unit,
+    onPreviewWhatsAppReport: () -> Unit,
     onExportJson: () -> Unit,
     onOpenImportDialog: () -> Unit,
     onExportCsv: () -> Unit
@@ -380,6 +417,75 @@ private fun BackupRestoreTabContent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // WHATSAPP & NOTES SHARE CARD (FEATURE HIGHLIGHT)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(EmeraldPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Laporan WhatsApp & Catatan",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Format teks rapi dengan emoji & rekapitulasi lengkap",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Kirim rekap total aset, saldo tabungan tiap anggota keluarga, rekening kas, serta aktivitas terkini ke grup WhatsApp keluarga atau simpan ke aplikasi Catatan (Keep, Samsung Notes, dll).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onShareWhatsAppReportDirect,
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                        modifier = Modifier.weight(1.2f).testTag("share_whatsapp_direct_button")
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Kirim ke WA / Catatan", fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = onPreviewWhatsAppReport,
+                        modifier = Modifier.weight(0.8f).testTag("preview_whatsapp_report_button")
+                    ) {
+                        Icon(Icons.Default.Visibility, contentDescription = null, Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Pratinjau")
+                    }
+                }
+            }
+        }
+
         // JSON Backup Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -464,6 +570,7 @@ private fun BackupRestoreTabContent(
                 Text("Spesifikasi Sistem Pembukuan", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(6.dp))
                 Text("• Sistem: Double-Entry General Ledger (Buku Besar Dua Sisi)", style = MaterialTheme.typography.bodySmall)
+                Text("• Berbagi Laporan: WhatsApp, Google Keep, Notes, dan Clipboard", style = MaterialTheme.typography.bodySmall)
                 Text("• Mata Uang: Rupiah (IDR) tanpa desimal", style = MaterialTheme.typography.bodySmall)
                 Text("• Keamanan: Verifikasi saldo atomik & pencegahan transaksi ganda", style = MaterialTheme.typography.bodySmall)
                 Text("• Penyimpanan: Offline-First Hybrid dengan antrean pending", style = MaterialTheme.typography.bodySmall)

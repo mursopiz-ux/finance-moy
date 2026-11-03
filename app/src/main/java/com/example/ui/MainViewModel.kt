@@ -173,4 +173,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun generateWhatsAppFullReport(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val report = repository.generateWhatsAppFinancialSummaryReport()
+                onResult(report)
+            } catch (e: Exception) {
+                _snackbarMessage.value = "Gagal membuat laporan WhatsApp: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun generateReceiptText(transaction: TransactionRecord): String {
+        return repository.generateTransactionReceiptText(transaction)
+    }
 }

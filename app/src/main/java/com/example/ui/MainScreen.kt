@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,6 +18,7 @@ import com.example.ui.components.AddAccountDialog
 import com.example.ui.components.AddMemberDialog
 import com.example.ui.components.AddTransactionBottomSheet
 import com.example.ui.components.AdminSwitchDialog
+import com.example.ui.components.ShareUtils
 import com.example.ui.screens.*
 
 sealed class NavTab(val title: String, val icon: ImageVector, val tag: String) {
@@ -140,11 +142,18 @@ fun MainScreen(viewModel: MainViewModel) {
                     onNavigateToAccounts = { currentTab = NavTab.Accounts },
                     onNavigateToMembers = { currentTab = NavTab.Members }
                 )
-                NavTab.Transactions -> TransactionsScreen(
-                    transactions = transactions,
-                    onVoidTransaction = { id, reason -> viewModel.voidTransaction(id, reason) },
-                    onOpenAddTransaction = { showAddTransactionSheet = true }
-                )
+                NavTab.Transactions -> {
+                    val context = LocalContext.current
+                    TransactionsScreen(
+                        transactions = transactions,
+                        onVoidTransaction = { id, reason -> viewModel.voidTransaction(id, reason) },
+                        onOpenAddTransaction = { showAddTransactionSheet = true },
+                        onShareReceipt = { txn ->
+                            val text = viewModel.generateReceiptText(txn)
+                            ShareUtils.shareToWhatsAppOrNotes(context, text, "Bukti Transaksi — ${txn.id}")
+                        }
+                    )
+                }
                 NavTab.Members -> MembersScreen(
                     members = members,
                     onOpenAddMember = { showAddMemberDialog = true },
@@ -160,7 +169,8 @@ fun MainScreen(viewModel: MainViewModel) {
                     auditLogs = auditLogs,
                     onExportJson = { callback -> viewModel.exportBackup(callback) },
                     onImportJson = { json -> viewModel.importBackup(json) },
-                    onExportCsv = { callback -> viewModel.exportCsv(callback) }
+                    onExportCsv = { callback -> viewModel.exportCsv(callback) },
+                    onGenerateWhatsAppReport = { callback -> viewModel.generateWhatsAppFullReport(callback) }
                 )
             }
         }

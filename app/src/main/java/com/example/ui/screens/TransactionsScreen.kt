@@ -28,7 +28,8 @@ import com.example.ui.theme.*
 fun TransactionsScreen(
     transactions: List<TransactionRecord>,
     onVoidTransaction: (transactionId: String, reason: String) -> Unit,
-    onOpenAddTransaction: () -> Unit
+    onOpenAddTransaction: () -> Unit,
+    onShareReceipt: (TransactionRecord) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("ALL") }
@@ -154,7 +155,8 @@ fun TransactionsScreen(
                     items(filteredTransactions, key = { it.id }) { txn ->
                         TransactionCardItem(
                             transaction = txn,
-                            onVoidRequest = { transactionToVoid = txn }
+                            onVoidRequest = { transactionToVoid = txn },
+                            onShareReceipt = { onShareReceipt(txn) }
                         )
                     }
                 }
@@ -177,7 +179,8 @@ fun TransactionsScreen(
 @Composable
 private fun TransactionCardItem(
     transaction: TransactionRecord,
-    onVoidRequest: () -> Unit
+    onVoidRequest: () -> Unit,
+    onShareReceipt: () -> Unit = {}
 ) {
     val isDepositOrIncome = transaction.transactionType == "MEMBER_DEPOSIT" || transaction.transactionType == "FAMILY_INCOME"
     val isVoided = transaction.status == "VOIDED"
@@ -339,16 +342,30 @@ private fun TransactionCardItem(
                     color = MaterialTheme.colorScheme.outline
                 )
 
-                if (!isVoided && !isPending) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(
-                        onClick = onVoidRequest,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        onClick = onShareReceipt,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                     ) {
+                        Icon(Icons.Default.Share, contentDescription = null, Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Batalkan (Void)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error
+                            text = "Struk WA",
+                            style = MaterialTheme.typography.labelSmall
                         )
+                    }
+
+                    if (!isVoided && !isPending) {
+                        TextButton(
+                            onClick = onVoidRequest,
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Batal",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
